@@ -11,4 +11,4 @@ is a computer vision solution, this module might be placed on a desktop pc with 
 
 3- Android app: conatins the necessary code for the interactive gui on the android.
 
-A fourth module is under work which is going to be called "Tracking storage" that handles saving already tracked objects for later detection and tracking without having to reindicate them again.
+A fourth module is under investigation and is called "Tracking storage" that handles saving already tracked objects for later detection and tracking without having to reindicate them again.
