@@ -137,8 +137,28 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+    def bindSignals(self, pre_onConnect = None, pre_onExit = None, pre_onRadioBtn = None):
+        self.pre_onConnect = pre_onConnect
+        self.pre_onRadioBtn = pre_onRadioBtn
+        self.pre_onExit = pre_onExit
+        self.connect_PB.clicked.connect(self.onConnect)
+        self.exit_BP.clicked.connect(self.onExit)
+        self.box_RB.toggled.connect(self.onRadioBtn)
+        self.mask_RB.toggled.connect(self.onRadioBtn)
+        # self.stop_tracking_PB.connect(self.generate_sample)
 
-    
+    def retranslateUi(self, MainWindow):
+        _translate = QtCore.QCoreApplication.translate
+        MainWindow.setWindowTitle(_translate("MainWindow", "DeepTracker"))
+        self.exit_BP.setText(_translate("MainWindow", "Exit"))
+        self.label.setText(_translate("MainWindow", "IP Address"))
+        self.connect_PB.setText(_translate("MainWindow", "Connect"))
+        self.label_2.setText(_translate("MainWindow", "Port"))
+        self.stop_tracking_PB.setText(_translate("MainWindow", "Stop Tracking"))
+        self.status_label.setText(_translate("MainWindow", "Disconected"))
+        self.groupBox.setTitle(_translate("MainWindow", "Type"))
+        self.mask_RB.setText(_translate("MainWindow", "Segment"))
+        self.box_RB.setText(_translate("MainWindow", "Box"))
 
 import numpy as np
 if __name__ == "__main__":  
