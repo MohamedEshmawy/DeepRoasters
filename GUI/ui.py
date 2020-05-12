@@ -160,6 +160,22 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.mask_RB.setText(_translate("MainWindow", "Segment"))
         self.box_RB.setText(_translate("MainWindow", "Box"))
 
+    def draw(self, frame):
+            height, width, channel = frame.shape
+            bytesPerLine = 3 * width
+            qImg = QImage(frame.data, width, height, bytesPerLine, QImage.Format_RGB888)
+            self.frame.setPixmap(QPixmap(qImg))
+
+    def onConnect(self):
+            ip = str(self.IP_line.text())
+            port = int(str(self.port_line.text()))
+
+            if self.pre_onConnect is not None:
+                self.connect_PB.setEnabled(False)
+                if self.pre_onConnect(ip, port) == False:
+                    self.connect_PB.setEnabled(True)
+
+
 import numpy as np
 if __name__ == "__main__":  
 
