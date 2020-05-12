@@ -175,6 +175,18 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 if self.pre_onConnect(ip, port) == False:
                     self.connect_PB.setEnabled(True)
 
+    def onRadioBtn(self):
+        if self.pre_onConnect is not None:
+            if self.box_RB.isChecked():
+                self.pre_onRadioBtn(False) # false from box tracking
+            else:
+                self.pre_onRadioBtn(True) # true for masking
+
+    def onExit(self):
+        if self.pre_onExit is not None:
+            self.pre_onExit()
+        QtCore.QCoreApplication.instance().quit()
+
 
 import numpy as np
 if __name__ == "__main__":  
