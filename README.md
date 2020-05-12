@@ -19,16 +19,16 @@ UPDATES:
 - Added a ui module for the Core.
 
 How to use:
--clone the repo
--cd into the repo
--run   pip install -r requirements.txt
--download the model weights from http://www.robots.ox.ac.uk/~qwang/SiamMask_DAVIS.pth into core/siammask/weights
--run   python main.py
+- clone the repo
+- cd into the repo
+- run   pip install -r requirements.txt
+- download the model weights from http://www.robots.ox.ac.uk/~qwang/SiamMask_DAVIS.pth into core/siammask/weights
+- run   python main.py
 
 Packaging:
--run python setyp.py build
--copy the core folder into your newly created build folder that contains main.exe
--run main.exe
+- run python setyp.py build
+- copy the core folder into your newly created build folder that contains main.exe
+- run main.exe
 
 Android App:
 Build using android studio or wait until we upload the apk
