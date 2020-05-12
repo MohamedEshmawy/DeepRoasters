@@ -1,18 +1,22 @@
 package com.example.deeptracker;
 
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.hardware.Camera;
+import android.os.Handler;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.MotionEventCompat;
 
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Inet4Address;
@@ -22,22 +26,30 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.URI;
 import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Queue;
 
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+//import org.json.JSONException;
+//import org.json.JSONObject;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
@@ -46,71 +58,74 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static String SERVERIP;
     public static final int STREAMPORT = 8500;
     public static final int DATAPORT = 8501;
+    public static final int SERVERPORT = 8888;
+    public static Queue<Massege> sendQueue = new LinkedList<Massege>();
+
 
     // Loads camera view of OpenCV for us to use. This lets us see using OpenCV
     private CameraBridgeViewBase mOpenCvCameraView;
     FrameLayout preview;
-
+    // These variables are used (at the moment) to fix camera orientation from 270degree to 0degree
     Mat mRgba;
     static Mat sRgba;
-
 
 
     // variables used for drawing
     static boolean draw = false, init_tracking = false, tracking = false;
     static int beginX, beginY, endX, endY;
 
-    // used to hold sent data
-    static JSONObject sendData;
+    // used to hold sent and received data
+    static JsonObject sendData;
+    static StreamingServer server;
 
     // Used for logging success or failure messages
-    private static final String TAG = "OCVSample::Activity";
+    private static final String TAG = "Main:";
 
     public MainActivity() {
-        // initialized sendData variable
-        try {
-            sendData = new JSONObject();
-            sendData.put("beginX", -1);
-            sendData.put("beginY", -1);
-            sendData.put("endX", -1);
-            sendData.put("endY", -1);
+
+//        sendData = new JsonObject();
+//        sendData.addProperty("beginX", -1);
+//        sendData.addProperty("beginY", -1);
+//        sendData.addProperty("endX", -1);
+//        sendData.addProperty("endY", -1);
 
 
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+
+        // initialize streaming server
+        server = new StreamingServer(SERVERPORT);
+        server.start();
 
 
-        // initialize http servers
-        try {
-            // initialize Stream Server
-            HttpServer streamServer = HttpServer.create(new InetSocketAddress(STREAMPORT), 0);
-            HttpContext streamContext = streamServer.createContext("/");
-            streamContext.setHandler(MainActivity::handleStreamRequest);
-            // initialize Data Server
-            HttpServer dataServer = HttpServer.create(new InetSocketAddress(DATAPORT), 0);
-            HttpContext dataContext = dataServer.createContext("/");
-            dataContext.setHandler(MainActivity::handleDataRequest);
-
-            // start the servers
-            streamServer.start();
-            dataServer.start();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        // initialize http server
+//        try {
+//            HttpServer streamServer = HttpServer.create(new InetSocketAddress(STREAMPORT), 0);
+//            HttpServer dataServer = HttpServer.create(new InetSocketAddress(DATAPORT), 0);
+//            // Stream Server
+//            HttpContext streamContext = streamServer.createContext("/");
+//            streamContext.setHandler(MainActivity::handleStreamRequest);
+//            // Data Server
+//            HttpContext dataContext = dataServer.createContext("/");
+//            dataContext.setHandler(MainActivity::handleDataRequest);
+//
+//            streamServer.start();
+//            dataServer.start();
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_main);
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         serverStatus = (TextView) findViewById(R.id.textView);
         SERVERIP = getLocalIpAddress();
-        serverStatus.setText("Stream server Listening on IP: " + SERVERIP + ":" + STREAMPORT);
+        serverStatus.setText("Stream server Listening on IP: " + SERVERIP + ":" + SERVERPORT);
+        preview = (FrameLayout) findViewById(R.id.camera_preview);
 
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.show_camera_activity_java_surface_view);
@@ -167,8 +182,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public void onCameraViewStarted(int width, int height) {
 
         Log.i(TAG,"onCameraViewStarted");
-
         mRgba = new Mat(height, width, CvType.CV_8UC3);
+
         sRgba = new Mat(height, width, CvType.CV_8UC3);
 
     }
@@ -177,14 +192,47 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public void onCameraViewStopped() {
         Log.i(TAG,"onCameraViewStopped");
         mRgba.release();
-        sRgba.release();
     }
 
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         mRgba = inputFrame.rgba();
+        // Rotate mRgba 90 degrees
+//        Core.transpose(mRgba, mRgbaT);
+//        Imgproc.resize(mRgbaT, mRgbaF, mRgbaF.size(), 0,0, 0);
+//        Core.flip(mRgbaF, mRgba, 1 );
+
+//        Imgproc.resize(mRgba, mRgba, new Size(720,480), 0,0, 0);
         mRgba.copyTo(sRgba); // for streaming
+        server.send_message(new Massege(MatToBinary(sRgba), "frame"));
+
+
+
+        JsonObject j = server.recv_massege();
+        if (init_tracking && j != null)
+        {
+            init_tracking = false;
+            tracking = true;
+        }
+
+//        while(tracking && j == null)
+//        {
+//            j = server.recv_massege();
+//            if (!server.isConnected())
+//                tracking = false;
+//        }
+
+        if (tracking && j != null)
+        {
+            beginX = j.get("beginX").getAsInt();
+            beginY = j.get("beginY").getAsInt();
+            endX = j.get("endX").getAsInt();
+            endY = j.get("endY").getAsInt();
+        }
+
+
+
 
         Scalar color;
         if (draw)
@@ -197,11 +245,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 color = new Scalar(255, 0, 0);
 
             Imgproc.rectangle(mRgba, new Point(beginX, beginY), new Point(
-                    endX, endY), color, 4);
+                    endX, endY), color, 2);
         }
 
         return mRgba;
     }
+
 
 
     @SuppressWarnings("deprecation")
@@ -210,7 +259,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
 
         final int action = MotionEventCompat.getActionMasked(ev);
-
         int cols = mRgba.cols();
         int rows = mRgba.rows();
 
@@ -225,12 +273,15 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 draw = true;
                 tracking = false;
                 init_tracking = false;
+
                 break;
             }
 
             case MotionEvent.ACTION_MOVE: {
                 endX = (int)ev.getX() - xOffset;
+;
                 endY = (int)ev.getY()- yOffset;
+;
                 draw = true;
                 tracking = false;
                 init_tracking = false;
@@ -241,7 +292,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 endX = (int)ev.getX() - xOffset;
                 endY = (int)ev.getY() - yOffset;
                 draw = true;
-                tracking = false;
                 init_tracking = true;
                 break;
 
@@ -251,14 +301,15 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 break;
             }
         }
-
-        if (init_tracking)
-            try {
-                sendData.put("beginX", beginX);
-                sendData.put("beginY", beginY);
-                sendData.put("endX", endX);
-                sendData.put("endY", endY);
-            } catch (JSONException e) {e.printStackTrace();}
+        if (init_tracking) {
+            JsonObject sendData = new JsonObject();
+            sendData.addProperty("beginX", beginX);
+            sendData.addProperty("beginY", beginY);
+            sendData.addProperty("endX", endX);
+            sendData.addProperty("endY", endY);
+            while(!server.send_message(new Massege(sendData.toString().getBytes(), "data")))
+                continue;
+        }
 
 
         return true;
@@ -299,86 +350,16 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return c;
     }
 
+    private byte[] MatToBinary(Mat mat)
+    {
+        Bitmap image = Bitmap.createBitmap(sRgba.cols(),
+                sRgba.rows(), Bitmap.Config.RGB_565);
+        Utils.matToBitmap(sRgba, image);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        image.compress(Bitmap.CompressFormat.JPEG, 50, stream);
 
-    private static void handleDataRequest(HttpExchange exchange){
-
-        JSONObject receivedData = new JSONObject();
-        try {
-            String response = sendData.toString();
-
-            try {
-                URI requestURI = exchange.getRequestURI();
-                String query = requestURI.getQuery();
-
-                // set new received data
-                String queries[] = query.split("&");
-                for (int i = 0; i < queries.length; i++) {
-                    String split[] = queries[i].split("=");
-                    receivedData.put(split[0], Integer.parseInt(split[1]));
-                }
-                if (init_tracking && queries.length > 2) {
-                        Log.i(TAG,"tracking");
-                        init_tracking = false;
-                        tracking = true;
-                    }
-
-                if (tracking)
-                {
-                    beginX = receivedData.getInt("beginX");
-                    beginY = receivedData.getInt("beginY");
-                    endX = receivedData.getInt("endX");
-                    endY = receivedData.getInt("endY");
-                }
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                    Log.i(TAG,e.getMessage());
-                }
-
-            exchange.sendResponseHeaders(200, response.getBytes().length);//response code and length
-            OutputStream os = exchange.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        byte[] b = stream.toByteArray();
+        image.recycle();
+        return b;
     }
-
-    private static void handleStreamRequest(HttpExchange exchange){
-        OutputStream os = null;
-        try {
-
-            os = exchange.getResponseBody();
-            exchange.sendResponseHeaders(200, 0);
-
-            while (true) {
-
-                Bitmap image = Bitmap.createBitmap(sRgba.cols(),
-                        sRgba.rows(), Bitmap.Config.RGB_565);
-                Utils.matToBitmap(sRgba, image);
-                ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                image.compress(Bitmap.CompressFormat.JPEG, 50, stream);
-
-                byte[] b = stream.toByteArray();
-                image.recycle();
-
-                os.write(b);
-                Thread.sleep(1000 / 40);
-                os.flush();
-
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-            try {
-                if (os != null) {
-                    os.close();
-                    exchange.close();
-                }
-            } catch (Exception e2) {
-                    e2.printStackTrace();
-                }
-        }
-    }
-
 }
