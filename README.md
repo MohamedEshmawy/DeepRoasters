@@ -2,7 +2,7 @@ This repo is for our CVC competition project.
 
 Tracking is a fundamental task in any video application requiring some degree of reasoning about objects of interest, our project aims to create an android app to demonstrate real-time object tracking by only clicking on an object in the app.
 
-- Demo: youtube.com/watch?v=eARfc5k8Wj8
+- Demo: https://www.youtube.com/watch?v=eARfc5k8Wj8
 
 The project consists of three main modules:
 
